@@ -25,14 +25,13 @@
             데이터 우회 서버를 탐색 중입니다. 잠시만 기다려주세요... 🚀
         </div>
         
-        <div id="error-box" class="hidden bg-red-100 text-red-700 p-4 rounded-xl text-center font-bold">
-            </div>
+        <div id="error-box" class="hidden bg-red-100 text-red-700 p-4 rounded-xl text-center font-bold"></div>
 
         <div id="content" class="hidden space-y-8">
             <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition">
                     <div class="text-5xl mb-2">👑</div>
-                    <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (주식 GOAT🐐)</h2>
+                    <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (오마카세 예약)</h2>
                     <div id="winner-info" class="text-3xl font-black text-white mt-2 drop-shadow-md"></div>
                 </div>
                 <div class="bg-gradient-to-br from-red-500 to-rose-700 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition">
@@ -43,41 +42,33 @@
             </section>
 
             <section class="bg-white rounded-2xl p-4 md:p-6 shadow-md border border-slate-100">
-                <h3 class="text-xl font-bold mb-4">📈 6개월 가격 추이 (원화 환산 종가)</h3>
+                <h3 class="text-xl font-bold mb-4">📈 6개월 수익률 추이 (2/26 가치 = 100 기준)</h3>
                 <div class="relative h-[400px] w-full">
                     <canvas id="priceChart"></canvas>
                 </div>
             </section>
 
-            <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
-                    <div class="bg-slate-800 text-white text-center py-3 font-bold">💰 현재 종가 순위</div>
-                    <ul id="list-price" class="divide-y divide-slate-100 p-4"></ul>
-                </div>
-                <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
-                    <div class="bg-blue-600 text-white text-center py-3 font-bold">📊 2/26 대비 수익률 순위</div>
+                    <div class="bg-blue-600 text-white text-center py-3 font-bold">📊 2/26 대비 현재 수익률 순위</div>
                     <ul id="list-return" class="divide-y divide-slate-100 p-4"></ul>
                 </div>
                 <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
-                    <div class="bg-purple-600 text-white text-center py-3 font-bold">⚖️ 종가 순위 vs 수익률 순위</div>
-                    <ul id="list-diff" class="divide-y divide-slate-100 p-4"></ul>
+                    <div class="bg-purple-600 text-white text-center py-3 font-bold">📉 전일 대비 순위 변동</div>
+                    <ul id="list-trend" class="divide-y divide-slate-100 p-4"></ul>
                 </div>
             </section>
         </div>
     </div>
 
     <script>
-        // 1. 설정
         const BASE_DATE = "2026-02-26";
-        
-        // 프록시 서버 리스트 (하나가 죽으면 다음 녀석으로 자동 시도)
         const PROXIES = [
             "https://corsproxy.io/?",
             "https://api.allorigins.win/raw?url=",
             "https://api.codetabs.com/v1/proxy?quest="
         ];
         
-        // 2. 트랙킹 주식 리스트
         const participants = [
             { name: "지빈", ticker: "052690.KS", color: "#3B82F6", isUS: false }, 
             { name: "병호", ticker: "NVDA", color: "#10B981", isUS: true },      
@@ -94,16 +85,13 @@
             errorBox.classList.remove('hidden');
         }
 
-        // 안정성을 높인 데이터 패치 함수 (프록시 릴레이)
         async function fetchYahooData(ticker) {
             const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=6mo&interval=1d&cb=${Date.now()}`;
-            
             for (let proxy of PROXIES) {
                 try {
                     let fetchUrl = proxy.includes('codetabs') ? proxy + targetUrl : proxy + encodeURIComponent(targetUrl);
-                    
                     const response = await fetch(fetchUrl);
-                    if (!response.ok) continue; // 실패하면 바로 다음 프록시로 넘어감
+                    if (!response.ok) continue; 
                     
                     const data = await response.json();
                     if (!data.chart || !data.chart.result) continue;
@@ -120,13 +108,12 @@
                             history[dateStr] = closes[i];
                         }
                     }
-                    return history; // 성공하면 데이터 반환
+                    return history; 
                 } catch (error) {
                     console.warn(`[Proxy Failed] ${proxy} for ${ticker}`);
-                    // 에러가 나도 멈추지 않고 다음 프록시 시도
                 }
             }
-            return null; // 모든 프록시 서버가 실패했을 때만 null 반환
+            return null; 
         }
 
         async function init() {
@@ -171,24 +158,31 @@
             });
 
             const validDates = allDates.filter(d => participants.every(p => p.historyKRW[d] !== undefined));
-            if (validDates.length === 0) {
-                showError("🚨 아직 공통된 거래일 데이터가 충분히 쌓이지 않았습니다.");
-                return;
-            }
+            if (validDates.length === 0) return showError("🚨 아직 공통된 거래일 데이터가 충분히 쌓이지 않았습니다.");
 
             let baselineIndex = validDates.findIndex(d => d >= BASE_DATE);
             if (baselineIndex === -1) baselineIndex = validDates.length - 1; 
             
             const actualBaseDate = validDates[baselineIndex];
             const currentDate = validDates[validDates.length - 1];
+            // 전일 데이터 (어제 종가 순위 계산용)
+            const prevDate = validDates.length > 1 ? validDates[validDates.length - 2] : currentDate;
 
             participants.forEach(p => {
                 p.basePrice = p.historyKRW[actualBaseDate] || 1; 
                 p.currentPrice = p.historyKRW[currentDate] || 0;
+                p.prevPrice = p.historyKRW[prevDate] || 0;
+
+                // 2/26 대비 현재 수익률
                 p.returnRate = ((p.currentPrice - p.basePrice) / p.basePrice) * 100;
-                if (isNaN(p.returnRate)) p.returnRate = 0;
+                // 2/26 대비 전일 수익률 (어제 순위 도출용)
+                p.prevReturnRate = ((p.prevPrice - p.basePrice) / p.basePrice) * 100;
                 
-                p.chartData = validDates.map(d => p.historyKRW[d]);
+                if (isNaN(p.returnRate)) p.returnRate = 0;
+                if (isNaN(p.prevReturnRate)) p.prevReturnRate = 0;
+                
+                // 1. 차트 데이터 정규화 (2/26 가격 = 100 기준)
+                p.chartData = validDates.map(d => (p.historyKRW[d] / p.basePrice) * 100);
             });
 
             document.getElementById('loading').style.display = 'none';
@@ -210,6 +204,10 @@
 
         function renderChart(labels) {
             const ctx = document.getElementById('priceChart').getContext('2d');
+            
+            // 기준일(100) 점선 그리기 용
+            const referenceLine = Array(labels.length).fill(100);
+
             const datasets = participants.map(p => ({
                 label: p.name,
                 data: p.chartData,
@@ -222,6 +220,18 @@
                 showLine: true
             }));
 
+            // 100 기준선 추가
+            datasets.push({
+                label: '기준선 (100)',
+                data: referenceLine,
+                borderColor: '#94A3B8',
+                borderWidth: 2,
+                borderDash: [5, 5],
+                pointRadius: 0,
+                fill: false,
+                order: 10 // 가장 뒤에 그려지도록
+            });
+
             new Chart(ctx, {
                 type: 'line', 
                 data: { labels: labels, datasets: datasets },
@@ -231,14 +241,18 @@
                     interaction: { mode: 'index', intersect: false },
                     scales: {
                         x: { display: true },
-                        y: { display: true, title: { display: true, text: '종가 (원화)' } }
+                        y: { 
+                            display: true, 
+                            title: { display: true, text: '상대 가치 (2/26 = 100)' }
+                        }
                     },
                     plugins: {
                         legend: { position: 'top' },
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    return `${context.dataset.label}: ₩${Math.round(context.raw).toLocaleString()}`;
+                                    if (context.dataset.label === '기준선 (100)') return null; // 툴팁에서 기준선 생략
+                                    return `${context.dataset.label}: ${context.raw.toFixed(1)} 포인트`;
                                 }
                             }
                         }
@@ -248,20 +262,12 @@
         }
 
         function renderLists() {
-            const sortedByPrice = [...participants].sort((a, b) => b.currentPrice - a.currentPrice);
-            const priceList = document.getElementById('list-price');
-            sortedByPrice.forEach((p, idx) => {
-                p.priceRank = idx + 1; 
-                priceList.innerHTML += `<li class="py-3 flex justify-between items-center">
-                    <span class="font-bold">${idx + 1}. ${p.name}</span>
-                    <span class="text-slate-600">₩${Math.round(p.currentPrice).toLocaleString()}</span>
-                </li>`;
-            });
-
+            // 현재 순위 계산
             const sortedByReturn = [...participants].sort((a, b) => b.returnRate - a.returnRate);
             const returnList = document.getElementById('list-return');
+            
             sortedByReturn.forEach((p, idx) => {
-                p.returnRank = idx + 1; 
+                p.currentRank = idx + 1; 
                 const color = p.returnRate >= 0 ? 'text-red-500' : 'text-blue-500';
                 returnList.innerHTML += `<li class="py-3 flex justify-between items-center">
                     <span class="font-bold">${idx + 1}. ${p.name}</span>
@@ -269,18 +275,26 @@
                 </li>`;
             });
 
-            const diffList = document.getElementById('list-diff');
-            participants.forEach(p => {
-                const diff = p.priceRank - p.returnRank;
-                let diffText = diff === 0 ? '<span class="text-slate-400">-</span>' : 
-                               diff > 0 ? `<span class="text-red-500">▲${diff}</span>` : 
-                               `<span class="text-blue-500">▼${Math.abs(diff)}</span>`;
+            // 전일 순위 계산
+            const sortedByPrevReturn = [...participants].sort((a, b) => b.prevReturnRate - a.prevReturnRate);
+            sortedByPrevReturn.forEach((p, idx) => {
+                p.prevRank = idx + 1; 
+            });
+
+            // 순위 변동 추이 렌더링 (현재 순위대로 나열)
+            const trendList = document.getElementById('list-trend');
+            sortedByReturn.forEach(p => {
+                const diff = p.prevRank - p.currentRank; 
+                // diff > 0 이면 순위 상승 (예: 3위 -> 2위 = 1 상승)
+                let diffText = diff === 0 ? '<span class="text-slate-400 font-bold">-</span>' : 
+                               diff > 0 ? `<span class="text-red-500 font-bold">▲${diff}</span>` : 
+                               `<span class="text-blue-500 font-bold">▼${Math.abs(diff)}</span>`;
                 
-                diffList.innerHTML += `<li class="py-3 flex justify-between items-center text-sm">
+                trendList.innerHTML += `<li class="py-3 flex justify-between items-center text-sm">
                     <span class="font-bold w-16">${p.name}</span>
-                    <span>종가 ${p.priceRank}위</span>
-                    <span>수익 ${p.returnRank}위</span>
-                    <span class="w-8 text-right font-bold">${diffText}</span>
+                    <span class="text-slate-500">어제 ${p.prevRank}위</span>
+                    <span class="font-bold">오늘 ${p.currentRank}위</span>
+                    <span class="w-8 text-right">${diffText}</span>
                 </li>`;
             });
         }
