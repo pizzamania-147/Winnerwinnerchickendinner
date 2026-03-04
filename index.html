@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>다음 모임 술값은 누가?</title>
+    <title>🍻 술값의 주인공은? 🍻</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -47,20 +47,25 @@
             </section>
 
             <section class="bg-white rounded-2xl p-4 md:p-6 shadow-md border border-slate-100">
-                <h3 class="text-lg font-bold mb-4 text-slate-700">📈 2/26 이후 수익률 추이<br> (매수 기준가 = 100)</h3>
+                <h3 class="text-lg font-bold mb-4 text-slate-700">📈 2/26 이후 수익률 추이</h3>
                 <div class="relative h-[400px] w-full">
                     <canvas id="priceChart"></canvas>
                 </div>
             </section>
 
             <section class="bg-white rounded-2xl p-4 md:p-6 shadow-md border border-slate-100">
-                <h3 class="text-lg font-bold mb-4 text-slate-700">📉 2/26 이후 순위 변동 추이 (1등 쟁탈전)</h3>
+                <h3 class="text-lg font-bold mb-4 text-slate-700">📉 2/26 이후 순위 변동 추이</h3>
                 
                 <div id="rank-summary" class="flex flex-wrap gap-2 md:gap-4 mb-4 p-3 bg-slate-50 rounded-xl justify-center"></div>
 
                 <div class="relative h-[300px] w-full mt-4">
                     <canvas id="rankChart"></canvas>
                 </div>
+            </section>
+
+            <section class="bg-white rounded-2xl p-4 md:p-6 shadow-md border border-slate-100">
+                <h3 class="text-lg font-bold mb-4 text-slate-700">📌 참가자별 고른 종목 및 현재가 (원화 환산)</h3>
+                <ul id="list-current-price" class="divide-y divide-slate-100"></ul>
             </section>
         </div>
     </div>
@@ -73,12 +78,13 @@
             "https://api.codetabs.com/v1/proxy?quest="
         ];
         
+        // 종목명(stockName) 추가
         const participants = [
-            { name: "지빈", ticker: "052690.KS", color: "#3B82F6", isUS: false }, 
-            { name: "병호", ticker: "NVDA", color: "#10B981", isUS: true },      
-            { name: "성근", ticker: "KLAC", color: "#8B5CF6", isUS: true },      
-            { name: "핵잠", ticker: "TSLA", color: "#EF4444", isUS: true },      
-            { name: "구보", ticker: "SMR", color: "#F59E0B", isUS: true }        
+            { name: "지빈", stockName: "한전기술", ticker: "052690.KS", color: "#3B82F6", isUS: false }, 
+            { name: "병호", stockName: "엔비디아", ticker: "NVDA", color: "#10B981", isUS: true },      
+            { name: "성근", stockName: "KLA", ticker: "KLAC", color: "#8B5CF6", isUS: true },      
+            { name: "핵잠", stockName: "테슬라", ticker: "TSLA", color: "#EF4444", isUS: true },      
+            { name: "구보", stockName: "nuscale power", ticker: "SMR", color: "#F59E0B", isUS: true }        
         ];
         const KRW_USD_TICKER = "KRW=X";
 
@@ -199,11 +205,9 @@
                     return (p.historyKRW[d].close / p.basePrice) * 100;
                 });
 
-                // 순위 데이터를 담을 배열 초기화
                 p.rankData = [];
             });
 
-            // 🌟 매일매일의 순위 계산 로직 (순위 추이 그래프 및 요약용)
             filteredDates.forEach(d => {
                 let dailyReturns = participants.map(p => {
                     let currentClose = p.historyKRW[d].close || 0;
@@ -224,9 +228,10 @@
 
             renderSummary();
             renderLists();
-            renderRankSummary(); // 🌟 오늘의 요약 렌더링 추가
+            renderRankSummary(); 
             renderChart(chartDates);
             renderRankChart(filteredDates);
+            renderCurrentPrices(); // 🌟 현재가 렌더링 호출
         }
 
         function renderSummary() {
@@ -234,8 +239,9 @@
             const winner = sortedByReturn[0];
             const loser = sortedByReturn[sortedByReturn.length - 1];
 
-            document.getElementById('winner-info').innerHTML = `${winner.name}<br><span class="text-xl">(${winner.returnRate > 0 ? '+' : ''}${winner.returnRate.toFixed(2)}%)</span>`;
-            document.getElementById('loser-info').innerHTML = `${loser.name}<br><span class="text-xl">(${loser.returnRate > 0 ? '+' : ''}${loser.returnRate.toFixed(2)}%)</span>`;
+            // 이름 옆에 종목명 표시 추가
+            document.getElementById('winner-info').innerHTML = `${winner.name} <span class="text-xl font-normal opacity-80">(${winner.stockName})</span><br><span class="text-xl">(${winner.returnRate > 0 ? '+' : ''}${winner.returnRate.toFixed(2)}%)</span>`;
+            document.getElementById('loser-info').innerHTML = `${loser.name} <span class="text-xl font-normal opacity-80">(${loser.stockName})</span><br><span class="text-xl">(${loser.returnRate > 0 ? '+' : ''}${loser.returnRate.toFixed(2)}%)</span>`;
         }
 
         function renderLists() {
@@ -247,19 +253,17 @@
                 returnList.innerHTML += `<li class="py-3 flex justify-between items-center px-2 hover:bg-slate-50 transition">
                     <span class="font-bold flex items-center gap-2">
                         <span class="w-6 h-6 rounded-full text-white flex items-center justify-center text-sm" style="background-color: ${p.color}">${idx + 1}</span>
-                        ${p.name}
+                        ${p.name} <span class="text-sm text-slate-500 font-normal">(${p.stockName})</span>
                     </span>
                     <span class="${color} font-bold text-lg">${p.returnRate > 0 ? '+' : ''}${p.returnRate.toFixed(2)}%</span>
                 </li>`;
             });
         }
 
-        // 🌟 오늘의 순위 변동 요약 렌더링 함수 추가
         function renderRankSummary() {
             const summaryContainer = document.getElementById('rank-summary');
             let html = "";
             
-            // 현재 순위 기준으로 정렬해서 보여줌
             const sortedParticipants = [...participants].sort((a, b) => {
                 const aCurrentRank = a.rankData[a.rankData.length - 1];
                 const bCurrentRank = b.rankData[b.rankData.length - 1];
@@ -269,7 +273,7 @@
             sortedParticipants.forEach(p => {
                 const currentRank = p.rankData[p.rankData.length - 1];
                 const prevRank = p.rankData.length > 1 ? p.rankData[p.rankData.length - 2] : currentRank;
-                const diff = prevRank - currentRank; // >0 이면 순위 상승
+                const diff = prevRank - currentRank; 
                 
                 let icon = diff === 0 ? '<span class="text-slate-400 font-bold">-</span>' : 
                            diff > 0 ? `<span class="text-red-500 font-bold">▲${diff}</span>` : 
@@ -277,8 +281,8 @@
 
                 html += `<div class="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2 text-sm whitespace-nowrap">
                     <span class="w-3 h-3 rounded-full" style="background-color: ${p.color}"></span>
-                    <span class="font-bold">${p.name}</span>
-                    <span class="text-slate-600">${currentRank}위</span>
+                    <span class="font-bold">${p.name} <span class="font-normal text-slate-500 text-xs">(${p.stockName})</span></span>
+                    <span class="text-slate-600 ml-1">${currentRank}위</span>
                     <span class="w-6 text-right">${icon}</span>
                 </div>`;
             });
@@ -286,12 +290,33 @@
             summaryContainer.innerHTML = html;
         }
 
+        // 🌟 맨 아래 현재가 렌더링 함수
+        function renderCurrentPrices() {
+            const priceList = document.getElementById('list-current-price');
+            let html = "";
+            
+            // 1위부터 정렬해서 보여주기
+            const sortedParticipants = [...participants].sort((a, b) => b.returnRate - a.returnRate);
+
+            sortedParticipants.forEach(p => {
+                html += `<li class="py-3 flex justify-between items-center px-2 hover:bg-slate-50 transition">
+                    <span class="font-bold flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full" style="background-color: ${p.color}"></span>
+                        ${p.name} <span class="text-sm text-slate-500 font-normal">(${p.stockName})</span>
+                    </span>
+                    <span class="font-bold text-slate-700">₩${Math.round(p.currentPrice).toLocaleString()}</span>
+                </li>`;
+            });
+
+            priceList.innerHTML = html;
+        }
+
         function renderChart(labels) {
             const ctx = document.getElementById('priceChart').getContext('2d');
             const referenceLine = Array(labels.length).fill(100);
 
             const datasets = participants.map(p => ({
-                label: p.name,
+                label: `${p.name} (${p.stockName})`, // 차트 라벨에도 종목 표시
                 data: p.chartData,
                 borderColor: p.color,
                 backgroundColor: p.color,
@@ -346,7 +371,7 @@
             const ctx = document.getElementById('rankChart').getContext('2d');
             
             const datasets = participants.map(p => ({
-                label: p.name,
+                label: `${p.name} (${p.stockName})`, // 차트 라벨에도 종목 표시
                 data: p.rankData,
                 borderColor: p.color,
                 backgroundColor: p.color,
