@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>술값 주인공은?!</title>
+    <title>다음 모임 술값은 누가?</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -17,8 +17,8 @@
 
     <div class="max-w-5xl mx-auto space-y-8">
         <header class="text-center py-6">
-            <h1 class="text-4xl md:text-5xl font-black text-slate-900 drop-shadow-sm">🍻 술값 주인공은?! 🍻</h1>
-            <p class="text-slate-500 mt-2">기준가: 한국 주식 2/26(목) 종가 vs 미국 주식 2/26(목) 시가</p>
+            <h1 class="text-4xl md:text-5xl font-black text-slate-900 drop-shadow-sm">🍻 다음 모임 술값은 누가? 🍻</h1>
+            <p class="text-sm md:text-base text-slate-500 mt-2 font-bold">기준가: 한국 주식 2/26(목) 종가 vs 미국 주식 2/26(목) 시가</p>
         </header>
 
         <div id="loading" class="text-center py-20 text-xl font-bold text-blue-600 skeleton">
@@ -31,7 +31,7 @@
             <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition">
                     <div class="text-5xl mb-2">👑</div>
-                    <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (주식GOAT🐐)</h2>
+                    <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (오마카세 예약)</h2>
                     <div id="winner-info" class="text-3xl font-black text-white mt-2 drop-shadow-md"></div>
                 </div>
                 <div class="bg-gradient-to-br from-red-500 to-rose-700 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition">
@@ -41,21 +41,25 @@
                 </div>
             </section>
 
+            <section class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
+                <div class="bg-blue-600 text-white text-center py-3 font-bold text-lg">📊 현재 수익률 순위</div>
+                <ul id="list-return" class="divide-y divide-slate-100 p-4"></ul>
+            </section>
+
             <section class="bg-white rounded-2xl p-4 md:p-6 shadow-md border border-slate-100">
-                <h3 class="text-xl font-bold mb-4">📈 6개월 수익률 추이 (기준가 = 100 기준)</h3>
+                <h3 class="text-lg font-bold mb-4 text-slate-700">📈 2/26 이후 수익률 추이 (매수 기준가 = 100)</h3>
                 <div class="relative h-[400px] w-full">
                     <canvas id="priceChart"></canvas>
                 </div>
             </section>
 
-            <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
-                    <div class="bg-blue-600 text-white text-center py-3 font-bold">📊 기준가 대비 현재 수익률 순위</div>
-                    <ul id="list-return" class="divide-y divide-slate-100 p-4"></ul>
-                </div>
-                <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
-                    <div class="bg-purple-600 text-white text-center py-3 font-bold">📉 전일 대비 순위 변동</div>
-                    <ul id="list-trend" class="divide-y divide-slate-100 p-4"></ul>
+            <section class="bg-white rounded-2xl p-4 md:p-6 shadow-md border border-slate-100">
+                <h3 class="text-lg font-bold mb-4 text-slate-700">📉 2/26 이후 순위 변동 추이 (1등 쟁탈전)</h3>
+                
+                <div id="rank-summary" class="flex flex-wrap gap-2 md:gap-4 mb-4 p-3 bg-slate-50 rounded-xl justify-center"></div>
+
+                <div class="relative h-[300px] w-full mt-4">
+                    <canvas id="rankChart"></canvas>
                 </div>
             </section>
         </div>
@@ -85,7 +89,6 @@
             errorBox.classList.remove('hidden');
         }
 
-        // 야후 API에서 시가(open)와 종가(close)를 모두 가져오도록 수정
         async function fetchYahooData(ticker) {
             const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=6mo&interval=1d&cb=${Date.now()}`;
             for (let proxy of PROXIES) {
@@ -107,7 +110,6 @@
                         if (closes[i] !== null && closes[i] !== undefined) {
                             let d = new Date(timestamps[i] * 1000);
                             let dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                            // 시가와 종가를 객체 형태로 저장
                             history[dateStr] = {
                                 open: opens[i] || closes[i], 
                                 close: closes[i]
@@ -153,7 +155,6 @@
             participants.forEach(p => { p.historyKRW = {}; p.lastKnownOpen = 0; p.lastKnownClose = 0; });
 
             allDates.forEach(date => {
-                // 환율은 종가 기준으로 적용
                 if (exRateHistory[date]) lastKnownRates = exRateHistory[date].close; 
                 
                 participants.forEach(p => {
@@ -178,9 +179,10 @@
             
             const actualBaseDate = validDates[baselineIndex];
             const currentDate = validDates[validDates.length - 1];
-            const prevDate = validDates.length > 1 ? validDates[validDates.length - 2] : currentDate;
 
-            // 🌟 핵심 로직: 한국은 종가, 미국은 시가 기준 🌟
+            const filteredDates = validDates.filter(d => d >= actualBaseDate);
+            const chartDates = ["시작점 (100)", ...filteredDates];
+
             participants.forEach(p => {
                 if (p.isUS) {
                     p.basePrice = p.historyKRW[actualBaseDate].open || 1; 
@@ -188,26 +190,43 @@
                     p.basePrice = p.historyKRW[actualBaseDate].close || 1; 
                 }
                 
-                // 현재 가격과 어제 가격은 모두 매일매일의 '종가'로 추적
                 p.currentPrice = p.historyKRW[currentDate].close || 0;
-                p.prevPrice = p.historyKRW[prevDate].close || 0;
-
                 p.returnRate = ((p.currentPrice - p.basePrice) / p.basePrice) * 100;
-                p.prevReturnRate = ((p.prevPrice - p.basePrice) / p.basePrice) * 100;
-                
                 if (isNaN(p.returnRate)) p.returnRate = 0;
-                if (isNaN(p.prevReturnRate)) p.prevReturnRate = 0;
                 
-                // 차트 데이터 (해당일의 종가를 기준가로 정규화)
-                p.chartData = validDates.map(d => (p.historyKRW[d].close / p.basePrice) * 100);
+                p.chartData = chartDates.map(d => {
+                    if (d === "시작점 (100)") return 100;
+                    return (p.historyKRW[d].close / p.basePrice) * 100;
+                });
+
+                // 순위 데이터를 담을 배열 초기화
+                p.rankData = [];
+            });
+
+            // 🌟 매일매일의 순위 계산 로직 (순위 추이 그래프 및 요약용)
+            filteredDates.forEach(d => {
+                let dailyReturns = participants.map(p => {
+                    let currentClose = p.historyKRW[d].close || 0;
+                    let ret = ((currentClose - p.basePrice) / p.basePrice) * 100;
+                    return { name: p.name, ret: isNaN(ret) ? 0 : ret };
+                });
+
+                dailyReturns.sort((a, b) => b.ret - a.ret);
+
+                participants.forEach(p => {
+                    let rank = dailyReturns.findIndex(dr => dr.name === p.name) + 1;
+                    p.rankData.push(rank);
+                });
             });
 
             document.getElementById('loading').style.display = 'none';
             document.getElementById('content').classList.remove('hidden');
 
             renderSummary();
-            renderChart(validDates);
             renderLists();
+            renderRankSummary(); // 🌟 오늘의 요약 렌더링 추가
+            renderChart(chartDates);
+            renderRankChart(filteredDates);
         }
 
         function renderSummary() {
@@ -217,6 +236,54 @@
 
             document.getElementById('winner-info').innerHTML = `${winner.name}<br><span class="text-xl">(${winner.returnRate > 0 ? '+' : ''}${winner.returnRate.toFixed(2)}%)</span>`;
             document.getElementById('loser-info').innerHTML = `${loser.name}<br><span class="text-xl">(${loser.returnRate > 0 ? '+' : ''}${loser.returnRate.toFixed(2)}%)</span>`;
+        }
+
+        function renderLists() {
+            const sortedByReturn = [...participants].sort((a, b) => b.returnRate - a.returnRate);
+            const returnList = document.getElementById('list-return');
+            
+            sortedByReturn.forEach((p, idx) => {
+                const color = p.returnRate >= 0 ? 'text-red-500' : 'text-blue-500';
+                returnList.innerHTML += `<li class="py-3 flex justify-between items-center px-2 hover:bg-slate-50 transition">
+                    <span class="font-bold flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full text-white flex items-center justify-center text-sm" style="background-color: ${p.color}">${idx + 1}</span>
+                        ${p.name}
+                    </span>
+                    <span class="${color} font-bold text-lg">${p.returnRate > 0 ? '+' : ''}${p.returnRate.toFixed(2)}%</span>
+                </li>`;
+            });
+        }
+
+        // 🌟 오늘의 순위 변동 요약 렌더링 함수 추가
+        function renderRankSummary() {
+            const summaryContainer = document.getElementById('rank-summary');
+            let html = "";
+            
+            // 현재 순위 기준으로 정렬해서 보여줌
+            const sortedParticipants = [...participants].sort((a, b) => {
+                const aCurrentRank = a.rankData[a.rankData.length - 1];
+                const bCurrentRank = b.rankData[b.rankData.length - 1];
+                return aCurrentRank - bCurrentRank;
+            });
+
+            sortedParticipants.forEach(p => {
+                const currentRank = p.rankData[p.rankData.length - 1];
+                const prevRank = p.rankData.length > 1 ? p.rankData[p.rankData.length - 2] : currentRank;
+                const diff = prevRank - currentRank; // >0 이면 순위 상승
+                
+                let icon = diff === 0 ? '<span class="text-slate-400 font-bold">-</span>' : 
+                           diff > 0 ? `<span class="text-red-500 font-bold">▲${diff}</span>` : 
+                           `<span class="text-blue-500 font-bold">▼${Math.abs(diff)}</span>`;
+
+                html += `<div class="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2 text-sm whitespace-nowrap">
+                    <span class="w-3 h-3 rounded-full" style="background-color: ${p.color}"></span>
+                    <span class="font-bold">${p.name}</span>
+                    <span class="text-slate-600">${currentRank}위</span>
+                    <span class="w-6 text-right">${icon}</span>
+                </div>`;
+            });
+
+            summaryContainer.innerHTML = html;
         }
 
         function renderChart(labels) {
@@ -275,35 +342,55 @@
             });
         }
 
-        function renderLists() {
-            const sortedByReturn = [...participants].sort((a, b) => b.returnRate - a.returnRate);
-            const returnList = document.getElementById('list-return');
+        function renderRankChart(labels) {
+            const ctx = document.getElementById('rankChart').getContext('2d');
             
-            sortedByReturn.forEach((p, idx) => {
-                p.currentRank = idx + 1; 
-                const color = p.returnRate >= 0 ? 'text-red-500' : 'text-blue-500';
-                returnList.innerHTML += `<li class="py-3 flex justify-between items-center">
-                    <span class="font-bold">${idx + 1}. ${p.name}</span>
-                    <span class="${color} font-bold">${p.returnRate > 0 ? '+' : ''}${p.returnRate.toFixed(2)}%</span>
-                </li>`;
-            });
+            const datasets = participants.map(p => ({
+                label: p.name,
+                data: p.rankData,
+                borderColor: p.color,
+                backgroundColor: p.color,
+                borderWidth: 3, 
+                pointRadius: 4, 
+                pointHoverRadius: 8,
+                tension: 0.1,
+                showLine: true
+            }));
 
-            const sortedByPrevReturn = [...participants].sort((a, b) => b.prevReturnRate - a.prevReturnRate);
-            sortedByPrevReturn.forEach((p, idx) => { p.prevRank = idx + 1; });
-
-            const trendList = document.getElementById('list-trend');
-            sortedByReturn.forEach(p => {
-                const diff = p.prevRank - p.currentRank; 
-                let diffText = diff === 0 ? '<span class="text-slate-400 font-bold">-</span>' : 
-                               diff > 0 ? `<span class="text-red-500 font-bold">▲${diff}</span>` : 
-                               `<span class="text-blue-500 font-bold">▼${Math.abs(diff)}</span>`;
-                
-                trendList.innerHTML += `<li class="py-3 flex justify-between items-center text-sm">
-                    <span class="font-bold w-16">${p.name}</span>
-                    <span class="text-slate-500">어제 ${p.prevRank}위</span>
-                    <span class="font-bold">오늘 ${p.currentRank}위</span>
-                    <span class="w-8 text-right">${diffText}</span>
-                </li>`;
+            new Chart(ctx, {
+                type: 'line', 
+                data: { labels: labels, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { display: true },
+                        y: { 
+                            display: true, 
+                            reverse: true,
+                            min: 1,
+                            max: 5, 
+                            ticks: {
+                                stepSize: 1,
+                                callback: function(value) {
+                                    return value + '위';
+                                }
+                            },
+                            title: { display: true, text: '순위' }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.raw}위`;
+                                }
+                            }
+                        }
+                    }
+                }
             });
         }
 
