@@ -22,7 +22,7 @@
         </header>
 
         <div id="loading" class="text-center py-20 text-xl font-bold text-blue-600 skeleton">
-            주식 및 환율 데이터를 실시간으로 불러오고 계산하는 중입니다... 🚀
+            데이터 우회 서버를 탐색 중입니다. 잠시만 기다려주세요... 🚀
         </div>
         
         <div id="error-box" class="hidden bg-red-100 text-red-700 p-4 rounded-xl text-center font-bold">
@@ -32,7 +32,7 @@
             <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition">
                     <div class="text-5xl mb-2">👑</div>
-                    <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (주식GOD🐥)</h2>
+                    <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (주식 GOAT🐐)</h2>
                     <div id="winner-info" class="text-3xl font-black text-white mt-2 drop-shadow-md"></div>
                 </div>
                 <div class="bg-gradient-to-br from-red-500 to-rose-700 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition">
@@ -69,8 +69,13 @@
     <script>
         // 1. 설정
         const BASE_DATE = "2026-02-26";
-        // /get 대신 /raw를 사용하여 파싱 오류 원천 차단
-        const PROXY = "https://api.allorigins.win/raw?url=";
+        
+        // 프록시 서버 리스트 (하나가 죽으면 다음 녀석으로 자동 시도)
+        const PROXIES = [
+            "https://corsproxy.io/?",
+            "https://api.allorigins.win/raw?url=",
+            "https://api.codetabs.com/v1/proxy?quest="
+        ];
         
         // 2. 트랙킹 주식 리스트
         const participants = [
@@ -82,7 +87,6 @@
         ];
         const KRW_USD_TICKER = "KRW=X";
 
-        // 오류 출력 헬퍼 함수
         function showError(msg) {
             document.getElementById('loading').style.display = 'none';
             const errorBox = document.getElementById('error-box');
@@ -90,39 +94,42 @@
             errorBox.classList.remove('hidden');
         }
 
-        // Yahoo Finance 데이터 패치 함수
+        // 안정성을 높인 데이터 패치 함수 (프록시 릴레이)
         async function fetchYahooData(ticker) {
-            // 캐시 방지를 위해 cb(시간) 파라미터 추가
-            const targetUrl = encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=6mo&interval=1d&cb=${Date.now()}`);
-            try {
-                const response = await fetch(PROXY + targetUrl);
-                if (!response.ok) throw new Error("네트워크 응답 불량");
-                
-                const data = await response.json();
-                if (!data.chart || !data.chart.result) throw new Error("데이터 구조 이상");
-                
-                const result = data.chart.result[0];
-                const timestamps = result.timestamp || [];
-                const closes = result.indicators.quote[0].close || [];
-                
-                let history = {};
-                for (let i = 0; i < timestamps.length; i++) {
-                    if (closes[i] !== null && closes[i] !== undefined) {
-                        // 타임스탬프를 YYYY-MM-DD 형식으로 변환 (안정성 확보)
-                        let d = new Date(timestamps[i] * 1000);
-                        let dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                        history[dateStr] = closes[i];
+            const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=6mo&interval=1d&cb=${Date.now()}`;
+            
+            for (let proxy of PROXIES) {
+                try {
+                    let fetchUrl = proxy.includes('codetabs') ? proxy + targetUrl : proxy + encodeURIComponent(targetUrl);
+                    
+                    const response = await fetch(fetchUrl);
+                    if (!response.ok) continue; // 실패하면 바로 다음 프록시로 넘어감
+                    
+                    const data = await response.json();
+                    if (!data.chart || !data.chart.result) continue;
+                    
+                    const result = data.chart.result[0];
+                    const timestamps = result.timestamp || [];
+                    const closes = result.indicators.quote[0].close || [];
+                    
+                    let history = {};
+                    for (let i = 0; i < timestamps.length; i++) {
+                        if (closes[i] !== null && closes[i] !== undefined) {
+                            let d = new Date(timestamps[i] * 1000);
+                            let dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                            history[dateStr] = closes[i];
+                        }
                     }
+                    return history; // 성공하면 데이터 반환
+                } catch (error) {
+                    console.warn(`[Proxy Failed] ${proxy} for ${ticker}`);
+                    // 에러가 나도 멈추지 않고 다음 프록시 시도
                 }
-                return history;
-            } catch (error) {
-                console.error(`Error fetching ${ticker}:`, error);
-                return null; // 실패 시 null 반환
             }
+            return null; // 모든 프록시 서버가 실패했을 때만 null 반환
         }
 
         async function init() {
-            // 모든 데이터 동시 Fetch
             const promises = participants.map(p => fetchYahooData(p.ticker));
             promises.push(fetchYahooData(KRW_USD_TICKER));
             const results = await Promise.all(promises);
@@ -131,7 +138,6 @@
             let hasError = false;
             let errorTickers = [];
 
-            // Fetch 실패 검증
             participants.forEach((p, idx) => {
                 p.rawHistory = results[idx];
                 if (!p.rawHistory) {
@@ -141,20 +147,18 @@
             });
 
             if (hasError || !exRateHistory) {
-                showError(`🚨 데이터를 불러오지 못했습니다. (${errorTickers.join(', ')} 또는 환율)<br>API 제한에 걸렸을 수 있으니 잠시 후 다시 시도해주세요.`);
+                showError(`🚨 방화벽이 너무 강력합니다! (${errorTickers.join(', ')} 데이터를 불러오지 못함)<br>잠시 후 새로고침 해보시거나 네트워크 환경을 바꿔보세요.`);
                 return;
             }
 
-            // 모든 거래일 통합 및 정렬
             let allDatesSet = new Set();
             participants.forEach(p => Object.keys(p.rawHistory).forEach(d => allDatesSet.add(d)));
             Object.keys(exRateHistory).forEach(d => allDatesSet.add(d));
             let allDates = Array.from(allDatesSet).sort();
 
-            let lastKnownRates = 1350; // 환율 기본값
+            let lastKnownRates = 1350; 
             participants.forEach(p => { p.historyKRW = {}; p.lastKnownPrice = 0; });
 
-            // Forward Fill 로직 및 원화 환산
             allDates.forEach(date => {
                 if (exRateHistory[date]) lastKnownRates = exRateHistory[date];
                 
@@ -166,21 +170,18 @@
                 });
             });
 
-            // 유효한 날짜(모든 주식 데이터가 존재하는 날) 필터링
             const validDates = allDates.filter(d => participants.every(p => p.historyKRW[d] !== undefined));
             if (validDates.length === 0) {
-                showError("🚨 공통된 거래일 데이터가 없어 계산할 수 없습니다.");
+                showError("🚨 아직 공통된 거래일 데이터가 충분히 쌓이지 않았습니다.");
                 return;
             }
 
-            // 기준일 찾기 (2/26일 또는 가장 가까운 그 이후 날짜, 없으면 맨 마지막 날짜)
             let baselineIndex = validDates.findIndex(d => d >= BASE_DATE);
             if (baselineIndex === -1) baselineIndex = validDates.length - 1; 
             
             const actualBaseDate = validDates[baselineIndex];
             const currentDate = validDates[validDates.length - 1];
 
-            // 수익률 및 순위 계산 (NaN 방지 처리)
             participants.forEach(p => {
                 p.basePrice = p.historyKRW[actualBaseDate] || 1; 
                 p.currentPrice = p.historyKRW[currentDate] || 0;
@@ -190,7 +191,6 @@
                 p.chartData = validDates.map(d => p.historyKRW[d]);
             });
 
-            // 렌더링 시작
             document.getElementById('loading').style.display = 'none';
             document.getElementById('content').classList.remove('hidden');
 
@@ -285,7 +285,6 @@
             });
         }
 
-        // 실행
         init();
     </script>
 </body>
