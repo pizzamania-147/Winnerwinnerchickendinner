@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>다음 모임 술값은 누가?</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .skeleton { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto space-y-8">
+        <header class="text-center py-6">
+            <h1 class="text-4xl md:text-5xl font-black text-slate-900 drop-shadow-sm">🍻 다음 모임 술값은 누가? 🍻</h1>
+            <p class="text-slate-500 mt-2">기준일: 2026년 2월 26일 (목요일) 종가</p>
+        </header>
+
+        <div id="loading" class="text-center py-20 text-xl font-bold text-blue-600 skeleton">
+            주식 및 환율 데이터를 실시간으로 불러오고 계산하는 중입니다... 🚀
+        </div>
+
+        <div id="content" class="hidden space-y-8">
+            <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition">
+                    <div class="text-5xl mb-2">👑</div>
+                    <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (오마카세 예약)</h2>
+                    <div id="winner-info" class="text-3xl font-black text-white mt-2 drop-shadow-md"></div>
+                </div>
+                <div class="bg-gradient-to-br from-red-500 to-rose-700 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition">
+                    <div class="text-5xl mb-2">💀</div>
+                    <h2 class="text-2xl font-bold text-red-100">현재 꼴지 (술값 당첨!)</h2>
+                    <div id="loser-info" class="text-3xl font-black text-white mt-2 drop-shadow-md"></div>
+                </div>
+            </section>
+
+            <section class="bg-white rounded-2xl p-4 md:p-6 shadow-md border border-slate-100">
+                <h3 class="text-xl font-bold mb-4">📈 6개월 가격 추이 (원화 환산 종가)</h3>
+                <div class="relative h-[400px] w-full">
+                    <canvas id="priceChart"></canvas>
+                </div>
+            </section>
+
+            <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
+                    <div class="bg-slate-800 text-white text-center py-3 font-bold">💰 현재 종가 순위</div>
+                    <ul id="list-price" class="divide-y divide-slate-100 p-4"></ul>
+                </div>
+                <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
+                    <div class="bg-blue-600 text-white text-center py-3 font-bold">📊 기준가 대비 수익률 순위</div>
+                    <ul id="list-return" class="divide-y divide-slate-100 p-4"></ul>
+                </div>
+                <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
+                    <div class="bg-purple-600 text-white text-center py-3 font-bold">⚖️ 종가 순위 vs 수익률 순위</div>
+                    <ul id="list-diff" class="divide-y divide-slate-100 p-4"></ul>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        // 1. 설정
+        const BASE_DATE = "2026-02-26";
+        const PROXY = "https://api.allorigins.win/get?url=";
+        
+        // 2. 트랙킹 주식 리스트
+        const participants = [
+            { name: "지빈", ticker: "052690.KS", color: "#3B82F6", isUS: false }, // 한전기술
+            { name: "병호", ticker: "NVDA", color: "#10B981", isUS: true },      // 엔비디아
+            { name: "성근", ticker: "KLAC", color: "#8B5CF6", isUS: true },      // KLA
+            { name: "핵잠", ticker: "TSLA", color: "#EF4444", isUS: true },      // 테슬라
+            { name: "구보", ticker: "SMR", color: "#F59E0B", isUS: true }        // nuscale power
+        ];
+        const KRW_USD_TICKER = "KRW=X";
+
+        // Yahoo Finance 데이터 패치 함수
+        async function fetchYahooData(ticker) {
+            const url = encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=6mo&interval=1d`);
+            try {
+                const response = await fetch(PROXY + url);
+                const data = await response.json();
+                const parsed = JSON.parse(data.contents);
+                const result = parsed.chart.result[0];
+                const timestamps = result.timestamp;
+                const closes = result.indicators.quote[0].close;
+                
+                let history = {};
+                for (let i = 0; i < timestamps.length; i++) {
+                    if (closes[i] !== null) {
+                        let date = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
+                        history[date] = closes[i];
+                    }
+                }
+                return history;
+            } catch (error) {
+                console.error(`Error fetching ${ticker}:`, error);
+                return {};
+            }
+        }
+
+        async function init() {
+            // 모든 데이터 동시 Fetch
+            const promises = participants.map(p => fetchYahooData(p.ticker));
+            promises.push(fetchYahooData(KRW_USD_TICKER));
+            const results = await Promise.all(promises);
+            
+            const exRateHistory = results.pop(); // 마지막이 환율 데이터
+            participants.forEach((p, idx) => p.rawHistory = results[idx]);
+
+            // 모든 거래일 통합 및 정렬 (한국, 미국 휴장일이 다르므로)
+            let allDatesSet = new Set();
+            participants.forEach(p => Object.keys(p.rawHistory).forEach(d => allDatesSet.add(d)));
+            Object.keys(exRateHistory).forEach(d => allDatesSet.add(d));
+            let allDates = Array.from(allDatesSet).sort();
+
+            // 데이터 전처리: 빈 날짜는 직전 종가로 채우고 (Forward Fill), 4. 미국 주식 원화 환산
+            let lastKnownRates = 1350; // 기본값
+            participants.forEach(p => { p.historyKRW = {}; p.lastKnownPrice = 0; });
+
+            allDates.forEach(date => {
+                if (exRateHistory[date]) lastKnownRates = exRateHistory[date];
+                
+                participants.forEach(p => {
+                    if (p.rawHistory[date]) p.lastKnownPrice = p.rawHistory[date];
+                    if (p.lastKnownPrice > 0) {
+                        p.historyKRW[date] = p.isUS ? p.lastKnownPrice * lastKnownRates : p.lastKnownPrice;
+                    }
+                });
+            });
+
+            // 기준일 및 현재일 찾기
+            // 기준일(2/26)이 없으면 직전 거래일, 현재일은 배열의 마지막 날짜
+            const validDates = allDates.filter(d => participants.every(p => p.historyKRW[d] !== undefined));
+            const baselineIndex = validDates.findIndex(d => d >= BASE_DATE) !== -1 
+                ? validDates.findIndex(d => d >= BASE_DATE) 
+                : validDates.findIndex(d => d === validDates.filter(vd => vd <= BASE_DATE).pop());
+            
+            const actualBaseDate = validDates[baselineIndex];
+            const currentDate = validDates[validDates.length - 1];
+
+            // 수익률 및 순위 계산
+            participants.forEach(p => {
+                p.basePrice = p.historyKRW[actualBaseDate];
+                p.currentPrice = p.historyKRW[currentDate];
+                p.returnRate = ((p.currentPrice - p.basePrice) / p.basePrice) * 100;
+                
+                // 그래프용 데이터 배열 (Valid Dates 기준)
+                p.chartData = validDates.map(d => p.historyKRW[d]);
+            });
+
+            // 렌더링 시작
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').classList.remove('hidden');
+
+            renderSummary();
+            renderChart(validDates);
+            renderLists();
+        }
+
+        function renderSummary() {
+            // 수익률 기준 정렬
+            const sortedByReturn = [...participants].sort((a, b) => b.returnRate - a.returnRate);
+            const winner = sortedByReturn[0];
+            const loser = sortedByReturn[sortedByReturn.length - 1];
+
+            document.getElementById('winner-info').innerHTML = `${winner.name}<br><span class="text-xl">(${winner.returnRate > 0 ? '+' : ''}${winner.returnRate.toFixed(2)}%)</span>`;
+            document.getElementById('loser-info').innerHTML = `${loser.name}<br><span class="text-xl">(${loser.returnRate > 0 ? '+' : ''}${loser.returnRate.toFixed(2)}%)</span>`;
+        }
+
+        function renderChart(labels) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            const datasets = participants.map(p => ({
+                label: p.name,
+                data: p.chartData,
+                borderColor: p.color,
+                backgroundColor: p.color,
+                borderWidth: 2,
+                pointRadius: 1, // Scatter & Line 스타일 혼합
+                pointHoverRadius: 6,
+                tension: 0.1,
+                showLine: true
+            }));
+
+            new Chart(ctx, {
+                type: 'line', // Line 타입에 Point를 부여하여 Scatter & Line 스타일 구현
+                data: { labels: labels, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { display: true, title: { display: true, text: '날짜' } },
+                        y: { display: true, title: { display: true, text: '종가 (원화)' } }
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ₩${Math.round(context.raw).toLocaleString()}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderLists() {
+            // 종가 순위
+            const sortedByPrice = [...participants].sort((a, b) => b.currentPrice - a.currentPrice);
+            const priceList = document.getElementById('list-price');
+            sortedByPrice.forEach((p, idx) => {
+                p.priceRank = idx + 1; // 순위 기록
+                priceList.innerHTML += `<li class="py-3 flex justify-between items-center">
+                    <span class="font-bold">${idx + 1}. ${p.name}</span>
+                    <span class="text-slate-600">₩${Math.round(p.currentPrice).toLocaleString()}</span>
+                </li>`;
+            });
+
+            // 수익률 순위
+            const sortedByReturn = [...participants].sort((a, b) => b.returnRate - a.returnRate);
+            const returnList = document.getElementById('list-return');
+            sortedByReturn.forEach((p, idx) => {
+                p.returnRank = idx + 1; // 순위 기록
+                const color = p.returnRate >= 0 ? 'text-red-500' : 'text-blue-500';
+                returnList.innerHTML += `<li class="py-3 flex justify-between items-center">
+                    <span class="font-bold">${idx + 1}. ${p.name}</span>
+                    <span class="${color} font-bold">${p.returnRate > 0 ? '+' : ''}${p.returnRate.toFixed(2)}%</span>
+                </li>`;
+            });
+
+            // 종가 순위 vs 수익률 순위 비교
+            const diffList = document.getElementById('list-diff');
+            participants.forEach(p => {
+                const diff = p.priceRank - p.returnRank;
+                let diffText = diff === 0 ? '<span class="text-slate-400">-</span>' : 
+                               diff > 0 ? `<span class="text-red-500">▲${diff}</span>` : 
+                               `<span class="text-blue-500">▼${Math.abs(diff)}</span>`;
+                
+                diffList.innerHTML += `<li class="py-3 flex justify-between items-center text-sm">
+                    <span class="font-bold w-16">${p.name}</span>
+                    <span>종가 ${p.priceRank}위</span>
+                    <span>수익 ${p.returnRank}위</span>
+                    <span class="w-8 text-right font-bold">${diffText}</span>
+                </li>`;
+            });
+        }
+
+        // 실행
+        init();
+    </script>
+</body>
+</html>
