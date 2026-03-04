@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>다음 모임 술값은 누가?</title>
+    <title>술값 주인공은?!</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -17,8 +17,8 @@
 
     <div class="max-w-5xl mx-auto space-y-8">
         <header class="text-center py-6">
-            <h1 class="text-4xl md:text-5xl font-black text-slate-900 drop-shadow-sm">🍻 다음 모임 술값은 누가? 🍻</h1>
-            <p class="text-slate-500 mt-2">기준일: 2026년 2월 26일 (목요일) 종가 기준</p>
+            <h1 class="text-4xl md:text-5xl font-black text-slate-900 drop-shadow-sm">🍻 술값 주인공은?! 🍻</h1>
+            <p class="text-slate-500 mt-2">기준가: 한국 주식 2/26(목) 종가 vs 미국 주식 2/26(목) 시가</p>
         </header>
 
         <div id="loading" class="text-center py-20 text-xl font-bold text-blue-600 skeleton">
@@ -31,7 +31,7 @@
             <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition">
                     <div class="text-5xl mb-2">👑</div>
-                    <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (오마카세 예약)</h2>
+                    <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (주식GOAT🐐)</h2>
                     <div id="winner-info" class="text-3xl font-black text-white mt-2 drop-shadow-md"></div>
                 </div>
                 <div class="bg-gradient-to-br from-red-500 to-rose-700 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition">
@@ -42,7 +42,7 @@
             </section>
 
             <section class="bg-white rounded-2xl p-4 md:p-6 shadow-md border border-slate-100">
-                <h3 class="text-xl font-bold mb-4">📈 6개월 수익률 추이 (2/26 가치 = 100 기준)</h3>
+                <h3 class="text-xl font-bold mb-4">📈 6개월 수익률 추이 (기준가 = 100 기준)</h3>
                 <div class="relative h-[400px] w-full">
                     <canvas id="priceChart"></canvas>
                 </div>
@@ -50,7 +50,7 @@
 
             <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
-                    <div class="bg-blue-600 text-white text-center py-3 font-bold">📊 2/26 대비 현재 수익률 순위</div>
+                    <div class="bg-blue-600 text-white text-center py-3 font-bold">📊 기준가 대비 현재 수익률 순위</div>
                     <ul id="list-return" class="divide-y divide-slate-100 p-4"></ul>
                 </div>
                 <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
@@ -85,6 +85,7 @@
             errorBox.classList.remove('hidden');
         }
 
+        // 야후 API에서 시가(open)와 종가(close)를 모두 가져오도록 수정
         async function fetchYahooData(ticker) {
             const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=6mo&interval=1d&cb=${Date.now()}`;
             for (let proxy of PROXIES) {
@@ -98,6 +99,7 @@
                     
                     const result = data.chart.result[0];
                     const timestamps = result.timestamp || [];
+                    const opens = result.indicators.quote[0].open || [];
                     const closes = result.indicators.quote[0].close || [];
                     
                     let history = {};
@@ -105,7 +107,11 @@
                         if (closes[i] !== null && closes[i] !== undefined) {
                             let d = new Date(timestamps[i] * 1000);
                             let dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                            history[dateStr] = closes[i];
+                            // 시가와 종가를 객체 형태로 저장
+                            history[dateStr] = {
+                                open: opens[i] || closes[i], 
+                                close: closes[i]
+                            };
                         }
                     }
                     return history; 
@@ -144,15 +150,22 @@
             let allDates = Array.from(allDatesSet).sort();
 
             let lastKnownRates = 1350; 
-            participants.forEach(p => { p.historyKRW = {}; p.lastKnownPrice = 0; });
+            participants.forEach(p => { p.historyKRW = {}; p.lastKnownOpen = 0; p.lastKnownClose = 0; });
 
             allDates.forEach(date => {
-                if (exRateHistory[date]) lastKnownRates = exRateHistory[date];
+                // 환율은 종가 기준으로 적용
+                if (exRateHistory[date]) lastKnownRates = exRateHistory[date].close; 
                 
                 participants.forEach(p => {
-                    if (p.rawHistory[date]) p.lastKnownPrice = p.rawHistory[date];
-                    if (p.lastKnownPrice > 0) {
-                        p.historyKRW[date] = p.isUS ? p.lastKnownPrice * lastKnownRates : p.lastKnownPrice;
+                    if (p.rawHistory[date]) {
+                        p.lastKnownOpen = p.rawHistory[date].open;
+                        p.lastKnownClose = p.rawHistory[date].close;
+                    }
+                    if (p.lastKnownClose > 0) {
+                        p.historyKRW[date] = {
+                            open: p.isUS ? p.lastKnownOpen * lastKnownRates : p.lastKnownOpen,
+                            close: p.isUS ? p.lastKnownClose * lastKnownRates : p.lastKnownClose
+                        };
                     }
                 });
             });
@@ -165,24 +178,28 @@
             
             const actualBaseDate = validDates[baselineIndex];
             const currentDate = validDates[validDates.length - 1];
-            // 전일 데이터 (어제 종가 순위 계산용)
             const prevDate = validDates.length > 1 ? validDates[validDates.length - 2] : currentDate;
 
+            // 🌟 핵심 로직: 한국은 종가, 미국은 시가 기준 🌟
             participants.forEach(p => {
-                p.basePrice = p.historyKRW[actualBaseDate] || 1; 
-                p.currentPrice = p.historyKRW[currentDate] || 0;
-                p.prevPrice = p.historyKRW[prevDate] || 0;
+                if (p.isUS) {
+                    p.basePrice = p.historyKRW[actualBaseDate].open || 1; 
+                } else {
+                    p.basePrice = p.historyKRW[actualBaseDate].close || 1; 
+                }
+                
+                // 현재 가격과 어제 가격은 모두 매일매일의 '종가'로 추적
+                p.currentPrice = p.historyKRW[currentDate].close || 0;
+                p.prevPrice = p.historyKRW[prevDate].close || 0;
 
-                // 2/26 대비 현재 수익률
                 p.returnRate = ((p.currentPrice - p.basePrice) / p.basePrice) * 100;
-                // 2/26 대비 전일 수익률 (어제 순위 도출용)
                 p.prevReturnRate = ((p.prevPrice - p.basePrice) / p.basePrice) * 100;
                 
                 if (isNaN(p.returnRate)) p.returnRate = 0;
                 if (isNaN(p.prevReturnRate)) p.prevReturnRate = 0;
                 
-                // 1. 차트 데이터 정규화 (2/26 가격 = 100 기준)
-                p.chartData = validDates.map(d => (p.historyKRW[d] / p.basePrice) * 100);
+                // 차트 데이터 (해당일의 종가를 기준가로 정규화)
+                p.chartData = validDates.map(d => (p.historyKRW[d].close / p.basePrice) * 100);
             });
 
             document.getElementById('loading').style.display = 'none';
@@ -204,8 +221,6 @@
 
         function renderChart(labels) {
             const ctx = document.getElementById('priceChart').getContext('2d');
-            
-            // 기준일(100) 점선 그리기 용
             const referenceLine = Array(labels.length).fill(100);
 
             const datasets = participants.map(p => ({
@@ -220,7 +235,6 @@
                 showLine: true
             }));
 
-            // 100 기준선 추가
             datasets.push({
                 label: '기준선 (100)',
                 data: referenceLine,
@@ -229,7 +243,7 @@
                 borderDash: [5, 5],
                 pointRadius: 0,
                 fill: false,
-                order: 10 // 가장 뒤에 그려지도록
+                order: 10
             });
 
             new Chart(ctx, {
@@ -243,7 +257,7 @@
                         x: { display: true },
                         y: { 
                             display: true, 
-                            title: { display: true, text: '상대 가치 (2/26 = 100)' }
+                            title: { display: true, text: '상대 가치 (기준가 = 100)' }
                         }
                     },
                     plugins: {
@@ -251,7 +265,7 @@
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    if (context.dataset.label === '기준선 (100)') return null; // 툴팁에서 기준선 생략
+                                    if (context.dataset.label === '기준선 (100)') return null; 
                                     return `${context.dataset.label}: ${context.raw.toFixed(1)} 포인트`;
                                 }
                             }
@@ -262,7 +276,6 @@
         }
 
         function renderLists() {
-            // 현재 순위 계산
             const sortedByReturn = [...participants].sort((a, b) => b.returnRate - a.returnRate);
             const returnList = document.getElementById('list-return');
             
@@ -275,17 +288,12 @@
                 </li>`;
             });
 
-            // 전일 순위 계산
             const sortedByPrevReturn = [...participants].sort((a, b) => b.prevReturnRate - a.prevReturnRate);
-            sortedByPrevReturn.forEach((p, idx) => {
-                p.prevRank = idx + 1; 
-            });
+            sortedByPrevReturn.forEach((p, idx) => { p.prevRank = idx + 1; });
 
-            // 순위 변동 추이 렌더링 (현재 순위대로 나열)
             const trendList = document.getElementById('list-trend');
             sortedByReturn.forEach(p => {
                 const diff = p.prevRank - p.currentRank; 
-                // diff > 0 이면 순위 상승 (예: 3위 -> 2위 = 1 상승)
                 let diffText = diff === 0 ? '<span class="text-slate-400 font-bold">-</span>' : 
                                diff > 0 ? `<span class="text-red-500 font-bold">▲${diff}</span>` : 
                                `<span class="text-blue-500 font-bold">▼${Math.abs(diff)}</span>`;
