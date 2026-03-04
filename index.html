@@ -18,18 +18,21 @@
     <div class="max-w-5xl mx-auto space-y-8">
         <header class="text-center py-6">
             <h1 class="text-4xl md:text-5xl font-black text-slate-900 drop-shadow-sm">🍻 다음 모임 술값은 누가? 🍻</h1>
-            <p class="text-slate-500 mt-2">기준일: 2026년 2월 26일 (목요일) 종가</p>
+            <p class="text-slate-500 mt-2">기준일: 2026년 2월 26일 (목요일) 종가 기준</p>
         </header>
 
         <div id="loading" class="text-center py-20 text-xl font-bold text-blue-600 skeleton">
             주식 및 환율 데이터를 실시간으로 불러오고 계산하는 중입니다... 🚀
         </div>
+        
+        <div id="error-box" class="hidden bg-red-100 text-red-700 p-4 rounded-xl text-center font-bold">
+            </div>
 
         <div id="content" class="hidden space-y-8">
             <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition">
                     <div class="text-5xl mb-2">👑</div>
-                    <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (오마카세 예약)</h2>
+                    <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (주식GOD🐥)</h2>
                     <div id="winner-info" class="text-3xl font-black text-white mt-2 drop-shadow-md"></div>
                 </div>
                 <div class="bg-gradient-to-br from-red-500 to-rose-700 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition">
@@ -52,7 +55,7 @@
                     <ul id="list-price" class="divide-y divide-slate-100 p-4"></ul>
                 </div>
                 <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
-                    <div class="bg-blue-600 text-white text-center py-3 font-bold">📊 기준가 대비 수익률 순위</div>
+                    <div class="bg-blue-600 text-white text-center py-3 font-bold">📊 2/26 대비 수익률 순위</div>
                     <ul id="list-return" class="divide-y divide-slate-100 p-4"></ul>
                 </div>
                 <div class="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-100">
@@ -66,40 +69,55 @@
     <script>
         // 1. 설정
         const BASE_DATE = "2026-02-26";
-        const PROXY = "https://api.allorigins.win/get?url=";
+        // /get 대신 /raw를 사용하여 파싱 오류 원천 차단
+        const PROXY = "https://api.allorigins.win/raw?url=";
         
         // 2. 트랙킹 주식 리스트
         const participants = [
-            { name: "지빈", ticker: "052690.KS", color: "#3B82F6", isUS: false }, // 한전기술
-            { name: "병호", ticker: "NVDA", color: "#10B981", isUS: true },      // 엔비디아
-            { name: "성근", ticker: "KLAC", color: "#8B5CF6", isUS: true },      // KLA
-            { name: "핵잠", ticker: "TSLA", color: "#EF4444", isUS: true },      // 테슬라
-            { name: "구보", ticker: "SMR", color: "#F59E0B", isUS: true }        // nuscale power
+            { name: "지빈", ticker: "052690.KS", color: "#3B82F6", isUS: false }, 
+            { name: "병호", ticker: "NVDA", color: "#10B981", isUS: true },      
+            { name: "성근", ticker: "KLAC", color: "#8B5CF6", isUS: true },      
+            { name: "핵잠", ticker: "TSLA", color: "#EF4444", isUS: true },      
+            { name: "구보", ticker: "SMR", color: "#F59E0B", isUS: true }        
         ];
         const KRW_USD_TICKER = "KRW=X";
 
+        // 오류 출력 헬퍼 함수
+        function showError(msg) {
+            document.getElementById('loading').style.display = 'none';
+            const errorBox = document.getElementById('error-box');
+            errorBox.innerHTML = msg;
+            errorBox.classList.remove('hidden');
+        }
+
         // Yahoo Finance 데이터 패치 함수
         async function fetchYahooData(ticker) {
-            const url = encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=6mo&interval=1d`);
+            // 캐시 방지를 위해 cb(시간) 파라미터 추가
+            const targetUrl = encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=6mo&interval=1d&cb=${Date.now()}`);
             try {
-                const response = await fetch(PROXY + url);
+                const response = await fetch(PROXY + targetUrl);
+                if (!response.ok) throw new Error("네트워크 응답 불량");
+                
                 const data = await response.json();
-                const parsed = JSON.parse(data.contents);
-                const result = parsed.chart.result[0];
-                const timestamps = result.timestamp;
-                const closes = result.indicators.quote[0].close;
+                if (!data.chart || !data.chart.result) throw new Error("데이터 구조 이상");
+                
+                const result = data.chart.result[0];
+                const timestamps = result.timestamp || [];
+                const closes = result.indicators.quote[0].close || [];
                 
                 let history = {};
                 for (let i = 0; i < timestamps.length; i++) {
-                    if (closes[i] !== null) {
-                        let date = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
-                        history[date] = closes[i];
+                    if (closes[i] !== null && closes[i] !== undefined) {
+                        // 타임스탬프를 YYYY-MM-DD 형식으로 변환 (안정성 확보)
+                        let d = new Date(timestamps[i] * 1000);
+                        let dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                        history[dateStr] = closes[i];
                     }
                 }
                 return history;
             } catch (error) {
                 console.error(`Error fetching ${ticker}:`, error);
-                return {};
+                return null; // 실패 시 null 반환
             }
         }
 
@@ -109,19 +127,34 @@
             promises.push(fetchYahooData(KRW_USD_TICKER));
             const results = await Promise.all(promises);
             
-            const exRateHistory = results.pop(); // 마지막이 환율 데이터
-            participants.forEach((p, idx) => p.rawHistory = results[idx]);
+            const exRateHistory = results.pop(); 
+            let hasError = false;
+            let errorTickers = [];
 
-            // 모든 거래일 통합 및 정렬 (한국, 미국 휴장일이 다르므로)
+            // Fetch 실패 검증
+            participants.forEach((p, idx) => {
+                p.rawHistory = results[idx];
+                if (!p.rawHistory) {
+                    hasError = true;
+                    errorTickers.push(p.name);
+                }
+            });
+
+            if (hasError || !exRateHistory) {
+                showError(`🚨 데이터를 불러오지 못했습니다. (${errorTickers.join(', ')} 또는 환율)<br>API 제한에 걸렸을 수 있으니 잠시 후 다시 시도해주세요.`);
+                return;
+            }
+
+            // 모든 거래일 통합 및 정렬
             let allDatesSet = new Set();
             participants.forEach(p => Object.keys(p.rawHistory).forEach(d => allDatesSet.add(d)));
             Object.keys(exRateHistory).forEach(d => allDatesSet.add(d));
             let allDates = Array.from(allDatesSet).sort();
 
-            // 데이터 전처리: 빈 날짜는 직전 종가로 채우고 (Forward Fill), 4. 미국 주식 원화 환산
-            let lastKnownRates = 1350; // 기본값
+            let lastKnownRates = 1350; // 환율 기본값
             participants.forEach(p => { p.historyKRW = {}; p.lastKnownPrice = 0; });
 
+            // Forward Fill 로직 및 원화 환산
             allDates.forEach(date => {
                 if (exRateHistory[date]) lastKnownRates = exRateHistory[date];
                 
@@ -133,23 +166,27 @@
                 });
             });
 
-            // 기준일 및 현재일 찾기
-            // 기준일(2/26)이 없으면 직전 거래일, 현재일은 배열의 마지막 날짜
+            // 유효한 날짜(모든 주식 데이터가 존재하는 날) 필터링
             const validDates = allDates.filter(d => participants.every(p => p.historyKRW[d] !== undefined));
-            const baselineIndex = validDates.findIndex(d => d >= BASE_DATE) !== -1 
-                ? validDates.findIndex(d => d >= BASE_DATE) 
-                : validDates.findIndex(d => d === validDates.filter(vd => vd <= BASE_DATE).pop());
+            if (validDates.length === 0) {
+                showError("🚨 공통된 거래일 데이터가 없어 계산할 수 없습니다.");
+                return;
+            }
+
+            // 기준일 찾기 (2/26일 또는 가장 가까운 그 이후 날짜, 없으면 맨 마지막 날짜)
+            let baselineIndex = validDates.findIndex(d => d >= BASE_DATE);
+            if (baselineIndex === -1) baselineIndex = validDates.length - 1; 
             
             const actualBaseDate = validDates[baselineIndex];
             const currentDate = validDates[validDates.length - 1];
 
-            // 수익률 및 순위 계산
+            // 수익률 및 순위 계산 (NaN 방지 처리)
             participants.forEach(p => {
-                p.basePrice = p.historyKRW[actualBaseDate];
-                p.currentPrice = p.historyKRW[currentDate];
+                p.basePrice = p.historyKRW[actualBaseDate] || 1; 
+                p.currentPrice = p.historyKRW[currentDate] || 0;
                 p.returnRate = ((p.currentPrice - p.basePrice) / p.basePrice) * 100;
+                if (isNaN(p.returnRate)) p.returnRate = 0;
                 
-                // 그래프용 데이터 배열 (Valid Dates 기준)
                 p.chartData = validDates.map(d => p.historyKRW[d]);
             });
 
@@ -163,7 +200,6 @@
         }
 
         function renderSummary() {
-            // 수익률 기준 정렬
             const sortedByReturn = [...participants].sort((a, b) => b.returnRate - a.returnRate);
             const winner = sortedByReturn[0];
             const loser = sortedByReturn[sortedByReturn.length - 1];
@@ -180,21 +216,21 @@
                 borderColor: p.color,
                 backgroundColor: p.color,
                 borderWidth: 2,
-                pointRadius: 1, // Scatter & Line 스타일 혼합
+                pointRadius: 1, 
                 pointHoverRadius: 6,
                 tension: 0.1,
                 showLine: true
             }));
 
             new Chart(ctx, {
-                type: 'line', // Line 타입에 Point를 부여하여 Scatter & Line 스타일 구현
+                type: 'line', 
                 data: { labels: labels, datasets: datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
                     scales: {
-                        x: { display: true, title: { display: true, text: '날짜' } },
+                        x: { display: true },
                         y: { display: true, title: { display: true, text: '종가 (원화)' } }
                     },
                     plugins: {
@@ -212,22 +248,20 @@
         }
 
         function renderLists() {
-            // 종가 순위
             const sortedByPrice = [...participants].sort((a, b) => b.currentPrice - a.currentPrice);
             const priceList = document.getElementById('list-price');
             sortedByPrice.forEach((p, idx) => {
-                p.priceRank = idx + 1; // 순위 기록
+                p.priceRank = idx + 1; 
                 priceList.innerHTML += `<li class="py-3 flex justify-between items-center">
                     <span class="font-bold">${idx + 1}. ${p.name}</span>
                     <span class="text-slate-600">₩${Math.round(p.currentPrice).toLocaleString()}</span>
                 </li>`;
             });
 
-            // 수익률 순위
             const sortedByReturn = [...participants].sort((a, b) => b.returnRate - a.returnRate);
             const returnList = document.getElementById('list-return');
             sortedByReturn.forEach((p, idx) => {
-                p.returnRank = idx + 1; // 순위 기록
+                p.returnRank = idx + 1; 
                 const color = p.returnRate >= 0 ? 'text-red-500' : 'text-blue-500';
                 returnList.innerHTML += `<li class="py-3 flex justify-between items-center">
                     <span class="font-bold">${idx + 1}. ${p.name}</span>
@@ -235,7 +269,6 @@
                 </li>`;
             });
 
-            // 종가 순위 vs 수익률 순위 비교
             const diffList = document.getElementById('list-diff');
             participants.forEach(p => {
                 const diff = p.priceRank - p.returnRank;
