@@ -13,7 +13,7 @@
         .skeleton { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
         
-        /* 💀 꼴찌 덜덜덜 지진 애니메이션 */
+        /* 💀 꼴찌 덜덜덜 지진 애니메이션 (속도를 조금 더 빠르게 조절) */
         @keyframes shiver {
             0% { transform: translate(1px, 1px) rotate(0deg); }
             10% { transform: translate(-1px, -2px) rotate(-1deg); }
@@ -27,7 +27,7 @@
             90% { transform: translate(1px, 2px) rotate(0deg); }
             100% { transform: translate(1px, -2px) rotate(-1deg); }
         }
-        .shiver { animation: shiver 1.5s infinite; }
+        .shiver { animation: shiver 0.3s infinite; } /* 격렬하게 떨림 */
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen p-4 md:p-8">
@@ -37,7 +37,7 @@
             <h1 class="text-4xl md:text-5xl font-black text-slate-900 drop-shadow-sm">🍻 술값의 주인공은? 🍻</h1>
             <p class="text-sm md:text-base text-slate-500 mt-2 font-bold">기준가: 한국 주식 2/26(목) 종가 vs 미국 주식 2/26(목) 시가</p>
             
-            <div id="countdown" class="mt-4 inline-block bg-slate-800 text-yellow-300 px-6 py-2 rounded-full font-black text-lg shadow-md tracking-wider">
+            <div id="countdown" class="mt-4 inline-block bg-slate-800 text-yellow-300 px-4 md:px-6 py-2 rounded-full font-bold text-xs sm:text-sm md:text-base shadow-md tracking-wide">
                 ⏳ 결전의 날 계산 중...
             </div>
         </header>
@@ -50,15 +50,17 @@
 
         <div id="content" class="hidden space-y-8">
             <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition relative z-10">
+                <div id="winner-card" onclick="triggerConfetti()" class="bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition relative z-10 cursor-pointer">
                     <div class="text-5xl mb-2">👑</div>
                     <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (🐐주식GOAT🐐)</h2>
                     <div id="winner-info" class="text-3xl font-black text-white mt-2 drop-shadow-md"></div>
+                    <div class="text-yellow-800 text-xs mt-2 opacity-70 font-bold">(클릭해 보세요!)</div>
                 </div>
-                <div id="loser-card" class="bg-gradient-to-br from-red-500 to-rose-700 rounded-2xl p-6 shadow-lg text-center">
+                <div id="loser-card" onclick="triggerShiver()" class="bg-gradient-to-br from-red-500 to-rose-700 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition cursor-pointer">
                     <div class="text-5xl mb-2">💀</div>
-                    <h2 class="text-2xl font-bold text-red-100">현재 꼴지 (술값 당첨!)</h2>
+                    <h2 class="text-2xl font-bold text-red-100">현재 꼴지 (술값 결제 준비하십쇼💸)</h2>
                     <div id="loser-info" class="text-3xl font-black text-white mt-2 drop-shadow-md"></div>
+                    <div class="text-red-200 text-xs mt-2 opacity-70 font-bold">(클릭해 보세요!)</div>
                 </div>
             </section>
 
@@ -85,7 +87,7 @@
             </section>
 
             <section class="bg-white rounded-2xl p-4 md:p-6 shadow-md border border-slate-100">
-                <h3 class="text-lg font-bold mb-4 text-slate-700">📌 참가자별 고른 종목 및 현재가 (원화 환산)</h3>
+                <h3 class="text-lg font-bold mb-4 text-slate-700">📌 고른 종목 및 현재가 (원화 환산)</h3>
                 <ul id="list-current-price" class="divide-y divide-slate-100"></ul>
             </section>
         </div>
@@ -99,7 +101,6 @@
             "https://api.codetabs.com/v1/proxy?quest="
         ];
         
-        // 🌟 영문 종목명으로 변경 (Nvidia, Tesla, NuScale)
         const participants = [
             { name: "지빈", stockName: "한전기술", ticker: "052690.KS", color: "#3B82F6", isUS: false }, 
             { name: "병호", stockName: "Nvidia", ticker: "NVDA", color: "#10B981", isUS: true },      
@@ -109,9 +110,9 @@
         ];
         const KRW_USD_TICKER = "KRW=X";
 
-        // ⏳ D-Day 카운트다운 타이머 함수
+        // ⏳ D-Day 카운트다운 타이머 (텍스트 길이 최적화)
         function updateCountdown() {
-            const targetDate = new Date("2026-08-26T00:00:00+09:00").getTime(); // 한국 시간 기준 8월 26일 자정
+            const targetDate = new Date("2026-08-26T00:00:00+09:00").getTime(); 
             const now = new Date().getTime();
             const distance = targetDate - now;
 
@@ -125,11 +126,42 @@
             const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-            document.getElementById("countdown").innerHTML = `⏳ 결전(8/26)까지: <b>${days}일 ${hours}시간 ${minutes}분 ${seconds}초</b> 남음`;
+            // 모바일에서 한줄에 쏙 들어가도록 '남음' 글자를 뺐습니다.
+            document.getElementById("countdown").innerHTML = `⏳ 결전(8/26)까지: <b>${days}일 ${hours}시간 ${minutes}분 ${seconds}초</b>`;
         }
-        // 1초마다 타이머 갱신
         setInterval(updateCountdown, 1000);
         updateCountdown();
+
+        // 🎉 1등 카드 클릭 시 팡파르 트리거
+        function triggerConfetti() {
+            var duration = 2000; // 2초 동안 터짐
+            var animationEnd = Date.now() + duration;
+            var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
+
+            var interval = setInterval(function() {
+                var timeLeft = animationEnd - Date.now();
+                if (timeLeft <= 0) return clearInterval(interval);
+                var particleCount = 50 * (timeLeft / duration);
+                // 양쪽에서 폭죽 터트리기
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: 0.2, y: 0.5 } }));
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: 0.8, y: 0.5 } }));
+            }, 250);
+        }
+
+        // 💀 꼴찌 카드 클릭 시 지진 트리거
+        function triggerShiver() {
+            const card = document.getElementById('loser-card');
+            
+            // 이미 흔들리고 있다면 무시
+            if (card.classList.contains('shiver')) return;
+            
+            card.classList.add('shiver');
+            
+            // 딱 1.5초 뒤에 멈춤!
+            setTimeout(() => {
+                card.classList.remove('shiver');
+            }, 1500);
+        }
 
         function showError(msg) {
             document.getElementById('loading').style.display = 'none';
@@ -266,7 +298,6 @@
                 });
             });
 
-            // 화면에 렌더링
             document.getElementById('loading').style.display = 'none';
             document.getElementById('content').classList.remove('hidden');
 
@@ -276,28 +307,6 @@
             renderChart(chartDates);
             renderRankChart(filteredDates);
             renderCurrentPrices();
-
-            // 🎉 렌더링 완료 후 팡파르 애니메이션 트리거!
-            triggerConfetti();
-        }
-
-        function triggerConfetti() {
-            // 화면 왼쪽, 오른쪽 양쪽에서 폭죽 터트리기
-            var duration = 3000;
-            var animationEnd = Date.now() + duration;
-            var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
-
-            var interval = setInterval(function() {
-                var timeLeft = animationEnd - Date.now();
-                if (timeLeft <= 0) return clearInterval(interval);
-                var particleCount = 50 * (timeLeft / duration);
-                // 1등(왼쪽) 쪽으로 팡파르 집중
-                confetti(Object.assign({}, defaults, { particleCount, origin: { x: 0.2, y: 0.5 } }));
-                confetti(Object.assign({}, defaults, { particleCount, origin: { x: 0.8, y: 0.5 } }));
-            }, 250);
-
-            // 💀 꼴찌 박스에 덜덜덜 지진(shiver) 클래스 추가
-            document.getElementById('loser-card').classList.add('shiver');
         }
 
         function renderSummary() {
@@ -374,13 +383,12 @@
             priceList.innerHTML = html;
         }
 
-        // 🌟 모바일 대응을 위해 Legend(범례) 스타일링을 최적화한 공통 옵션
         const getLegendOptions = () => {
             const isMobile = window.innerWidth < 768;
             return {
-                position: isMobile ? 'bottom' : 'top', // 모바일에서는 하단으로
+                position: isMobile ? 'bottom' : 'top', 
                 labels: {
-                    usePointStyle: true, // 네모 박스 대신 동그라미 형태로 작게 표시
+                    usePointStyle: true, 
                     boxWidth: 8,
                     padding: 15,
                     font: { size: isMobile ? 11 : 13 }
@@ -430,7 +438,6 @@
                         }
                     },
                     plugins: {
-                        // 🌟 모바일 최적화된 범례 적용
                         legend: getLegendOptions(),
                         tooltip: {
                             callbacks: {
@@ -484,7 +491,6 @@
                         }
                     },
                     plugins: {
-                        // 🌟 모바일 최적화된 범례 적용
                         legend: getLegendOptions(),
                         tooltip: {
                             callbacks: {
