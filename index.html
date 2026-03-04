@@ -13,7 +13,7 @@
         .skeleton { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
         
-        /* 💀 꼴찌 덜덜덜 지진 애니메이션 (속도를 조금 더 빠르게 조절) */
+        /* 💀 꼴찌 덜덜덜 지진 애니메이션 */
         @keyframes shiver {
             0% { transform: translate(1px, 1px) rotate(0deg); }
             10% { transform: translate(-1px, -2px) rotate(-1deg); }
@@ -54,13 +54,11 @@
                     <div class="text-5xl mb-2">👑</div>
                     <h2 class="text-2xl font-bold text-yellow-900">현재 1등 (🐐주식GOAT🐐)</h2>
                     <div id="winner-info" class="text-3xl font-black text-white mt-2 drop-shadow-md"></div>
-                    <div class="text-yellow-800 text-xs mt-2 opacity-70 font-bold">(클릭해 보세요!)</div>
                 </div>
                 <div id="loser-card" onclick="triggerShiver()" class="bg-gradient-to-br from-red-500 to-rose-700 rounded-2xl p-6 shadow-lg text-center transform hover:scale-105 transition cursor-pointer">
                     <div class="text-5xl mb-2">💀</div>
-                    <h2 class="text-2xl font-bold text-red-100">현재 꼴지 (술값 결제 준비하십쇼💸)</h2>
+                    <h2 class="text-2xl font-bold text-red-100">현재 꼴지 (술값 준비하십쇼💸)</h2>
                     <div id="loser-info" class="text-3xl font-black text-white mt-2 drop-shadow-md"></div>
-                    <div class="text-red-200 text-xs mt-2 opacity-70 font-bold">(클릭해 보세요!)</div>
                 </div>
             </section>
 
@@ -110,7 +108,7 @@
         ];
         const KRW_USD_TICKER = "KRW=X";
 
-        // ⏳ D-Day 카운트다운 타이머 (텍스트 길이 최적화)
+        // ⏳ D-Day 카운트다운 타이머
         function updateCountdown() {
             const targetDate = new Date("2026-08-26T00:00:00+09:00").getTime(); 
             const now = new Date().getTime();
@@ -126,7 +124,6 @@
             const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-            // 모바일에서 한줄에 쏙 들어가도록 '남음' 글자를 뺐습니다.
             document.getElementById("countdown").innerHTML = `⏳ 결전(8/26)까지: <b>${days}일 ${hours}시간 ${minutes}분 ${seconds}초</b>`;
         }
         setInterval(updateCountdown, 1000);
@@ -134,7 +131,7 @@
 
         // 🎉 1등 카드 클릭 시 팡파르 트리거
         function triggerConfetti() {
-            var duration = 2000; // 2초 동안 터짐
+            var duration = 2000; 
             var animationEnd = Date.now() + duration;
             var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
 
@@ -142,7 +139,6 @@
                 var timeLeft = animationEnd - Date.now();
                 if (timeLeft <= 0) return clearInterval(interval);
                 var particleCount = 50 * (timeLeft / duration);
-                // 양쪽에서 폭죽 터트리기
                 confetti(Object.assign({}, defaults, { particleCount, origin: { x: 0.2, y: 0.5 } }));
                 confetti(Object.assign({}, defaults, { particleCount, origin: { x: 0.8, y: 0.5 } }));
             }, 250);
@@ -152,12 +148,10 @@
         function triggerShiver() {
             const card = document.getElementById('loser-card');
             
-            // 이미 흔들리고 있다면 무시
             if (card.classList.contains('shiver')) return;
             
             card.classList.add('shiver');
             
-            // 딱 1.5초 뒤에 멈춤!
             setTimeout(() => {
                 card.classList.remove('shiver');
             }, 1500);
