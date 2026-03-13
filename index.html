@@ -93,11 +93,9 @@
 
     <script>
         const BASE_DATE = "2026-02-26";
-        const PROXIES = [
-            "https://corsproxy.io/?",
-            "https://api.allorigins.win/raw?url=",
-            "https://api.codetabs.com/v1/proxy?quest="
-        ];
+        
+        // 🚨 여기에 구글 앱스 스크립트 배포 후 얻은 '웹 앱 URL'을 넣어주세요! 🚨
+        const MY_PROXY_URL = "https://script.google.com/macros/s/AKfycbwricEvAKANALD-Wz2Is-S4vZlASpEAnYpCeL7_EtImF0fwmCEuSiH5wQTsrs7PALLLSQ/exec";
         
         const participants = [
             { name: "지빈", stockName: "한전기술", ticker: "052690.KS", color: "#3B82F6", isUS: false }, 
@@ -164,39 +162,42 @@
             errorBox.classList.remove('hidden');
         }
 
+        // 구글 전용 프록시 서버를 통해 데이터를 가져오는 함수
         async function fetchYahooData(ticker) {
-            const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=6mo&interval=1d&cb=${Date.now()}`;
-            for (let proxy of PROXIES) {
-                try {
-                    let fetchUrl = proxy.includes('codetabs') ? proxy + targetUrl : proxy + encodeURIComponent(targetUrl);
-                    const response = await fetch(fetchUrl);
-                    if (!response.ok) continue; 
-                    
-                    const data = await response.json();
-                    if (!data.chart || !data.chart.result) continue;
-                    
-                    const result = data.chart.result[0];
-                    const timestamps = result.timestamp || [];
-                    const opens = result.indicators.quote[0].open || [];
-                    const closes = result.indicators.quote[0].close || [];
-                    
-                    let history = {};
-                    for (let i = 0; i < timestamps.length; i++) {
-                        if (closes[i] !== null && closes[i] !== undefined) {
-                            let d = new Date(timestamps[i] * 1000);
-                            let dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                            history[dateStr] = {
-                                open: opens[i] || closes[i], 
-                                close: closes[i]
-                            };
-                        }
+            try {
+                // 내 구글 서버에 티커를 넘겨서 데이터를 요청
+                const fetchUrl = `${MY_PROXY_URL}?ticker=${ticker}`;
+                const response = await fetch(fetchUrl);
+                
+                if (!response.ok) throw new Error("네트워크 응답이 없습니다.");
+                
+                const data = await response.json();
+                
+                // 데이터 내부에 에러가 있으면 처리
+                if (data.error) throw new Error(data.error);
+                if (!data.chart || !data.chart.result) throw new Error("데이터 형식이 맞지 않습니다.");
+                
+                const result = data.chart.result[0];
+                const timestamps = result.timestamp || [];
+                const opens = result.indicators.quote[0].open || [];
+                const closes = result.indicators.quote[0].close || [];
+                
+                let history = {};
+                for (let i = 0; i < timestamps.length; i++) {
+                    if (closes[i] !== null && closes[i] !== undefined) {
+                        let d = new Date(timestamps[i] * 1000);
+                        let dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                        history[dateStr] = {
+                            open: opens[i] || closes[i], 
+                            close: closes[i]
+                        };
                     }
-                    return history; 
-                } catch (error) {
-                    console.warn(`[Proxy Failed] ${proxy} for ${ticker}`);
                 }
+                return history; 
+            } catch (error) {
+                console.warn(`[데이터 로드 실패] ${ticker}:`, error);
+                return null;
             }
-            return null; 
         }
 
         async function init() {
